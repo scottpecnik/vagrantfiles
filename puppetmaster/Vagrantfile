@@ -1,0 +1,41 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |puppetmaster|
+
+  puppetmaster.vm.box = "centos/7"
+  puppetmaster.vm.hostname = "puppetmaster.local"
+
+  # Create a forwarded port mapping which allows access to a specific port
+  # within the machine from a port on the host machine and only allow access
+  # via 127.0.0.1 to disable public access
+  puppetmaster.vm.network "forwarded_port", guest: 8080, host: 8080, host_ip: "127.0.0.1"
+
+  # Create a private network, which allows host-only access to the machine
+  # using a specific IP.
+  puppetmaster.vm.network "private_network", ip: "192.168.33.10"
+
+  # Create a public network, which generally matched to bridged network.
+  # Bridged networks make the machine appear as another physical device on
+  # your network.
+  # config.vm.network "public_network"
+
+   puppetmaster.vm.provider "virtualbox" do |vb|
+  #   # Customize the amount of memory on the VM:
+     vb.memory = "4096"
+   end
+
+  puppetmaster.vm.provision "shell", inline: <<-SHELL
+    rpm -Uvh https://yum.puppet.com/puppet5/puppet5-release-el-7.noarch.rpm
+    yum -y install puppetserver git
+    /opt/puppetlabs/puppet/bin/gem install r10k
+    # Manually cloning control repo in order to get
+    # puppet to lay down initial configuration.
+    # This gets overwritten by r10k later.
+    rm -rf /etc/puppetlabs/code/environments/production/*
+    /usr/bin/git clone https://github.com/scottpecnik/control-repo.git /etc/puppetlabs/code/environments/production
+    systemctl start puppetserver
+    cd /etc/puppetlabs/code/environments/production/ && /opt/puppetlabs/puppet/bin/r10k puppetfile install
+    /opt/puppetlabs/bin/puppet agent -t -v --server=puppetmaster.local
+  SHELL
+end
